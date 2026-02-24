@@ -41,14 +41,16 @@ class Intron:
 bioinfo.oneline_fasta(args.fasta, f"oneline_{args.fasta}")
 
 # Make set of motifs
-motifs = set()
+motifs = []
 with open(args.motifs, "r") as fh:
     for line in fh:
         line = line.strip("\n")
-        motifs.add(line)
+        motifs.append(line)
 
-# Hardcode colors for max of 5 motifs
-#colors = tuple(context.set_source_rgba(242, 37, 37, 1), context.set_source_rgba(240, 207, 26, 1), context.set_source_rgba(79, 212, 56, 1), context.set_source_rgba(34, 79, 235, 1), context.set_source_rgba(172, 56, 245, 1))
+# Make a dictionary of ambiguous bases and regular bases
+bases = {'A': 'A', 'C': 'C', 'G': 'G', 'T': 'T', 'U': 'T',
+         'W': '[AT]', 'S': '[CG]', 'M': '[AC]', 'K': '[GT]', 'R': '[AG]', 'Y': '[CT]',
+         'B': '[CGT]', 'D': '[AGT]', 'H': '[ACT]', 'V': '[ACG]', 'N': '[ACGT]'}
 
 # Initialize image
 width, height = 1100, 1300
@@ -56,18 +58,42 @@ width, height = 1100, 1300
 surface = cairo.SVGSurface(f"{args.fasta.split(".")[0]}.svg", width, height)
 context = cairo.Context(surface)
 
+# Hardcode colors for max of 5 motifs
+colors = ((242/255.0, 37/255.0, 37/255.0), (240/255.0, 207/255.0, 26/255.0), (79/255.0, 212/255.0, 56/255.0), (34/255.0, 79/255.0, 235/255.0), (172/255.0, 56/255.0, 245/255.0))
+
 # Make image legend
-# NOT DONE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+context.set_font_size(25)
+context.select_font_face("Arial", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+context.move_to(50, 50)
+context.show_text("Legend")
+
+context.set_font_size(20)
+num_motif = 0
+for motif in motifs:
+    context.set_source_rgb(*colors[num_motif])
+    context.rectangle(50 + (num_motif * 200), 75, 25, 25)
+    context.fill()
+    context.move_to(50 + (num_motif * 200) + 30, 95)
+    context.set_source_rgb(0, 0, 0)
+    context.show_text(f"{motif}")
+    num_motif += 1
 
 # Loop through fasta file, finding all motifs and creating diagram for each one
 num_seq = 0
+num_header = 0
 with open(f"oneline_{args.fasta}", "r") as fh:
     for line in fh:
         line = line.strip("\n")
 
-        # Keep track of which sequence it is
+        # Keep track of which sequence it is and write on image
         if line.startswith(">"):
             header = line
+            num_header += 1
+            context.set_font_size(15)
+            context.select_font_face("Arial", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+            context.move_to(50, (100 * num_header) + 65)
+            context.show_text(header)
+
         else:
             seq = line
             num_seq += 1
@@ -85,26 +111,41 @@ with open(f"oneline_{args.fasta}", "r") as fh:
             the_exon = re.search(r"[A-Z]+", seq)
             exon = Exon(the_exon.start(), the_exon.end())
 
+            # Draw each intron and the exon for the current sequnce
             context.set_line_width(2)
-            context.move_to(50, (100*num_seq) + 150)
-            context.line_to(50 + intron1.length, (100*num_seq) + 150)
+            context.move_to(50, (100 * num_seq) + 100)
+            context.line_to(50 + intron1.end, (100 * num_seq) + 100)
             context.stroke()
 
-            context.rectangle(50 + intron1.length, (100*num_seq) + 125, exon.length, 50)
+            context.rectangle(50 + intron1.end, (100 * num_seq) + 75, exon.length, 50)
             context.stroke()
 
-            context.move_to(50 + intron1.length + exon.length, (100*num_seq) + 150)
-            context.line_to(50 + intron1.length + exon.length + intron2.length, (100*num_seq) + 150)
+            context.move_to(50 + intron2.start, (100 * num_seq) + 100)
+            context.line_to(50 + intron2.end, (100 * num_seq) + 100)
             context.stroke()
 
+            # Find each motif at each point in the sequence and place on image
+            n = 0
+            for motif in motifs:
+                # Set color of current motif
+                context.set_source_rgb(*colors[n])
+
+                # Change motif to cotain regex for ambiguous nucleotides
+                searchable_motif = ""
+                for letter in motif:
+                    if letter.upper() in bases:
+                        searchable_motif += bases[letter.upper()]
+
+                # Search through current gene for all instances of current motif
+                for match in re.finditer(searchable_motif, seq, flags=re.IGNORECASE):
+                    m = Motif(match.group(), match.start(), match.end())
+                    context.rectangle(50 + m.start, 75 + (100 * num_seq) + (n * 10), m.length, 10)
+                    context.fill()
+                n += 1
+
+            # Reset color
+            context.set_source_rgb(0, 0, 0)
 
 
-
-
-
-
-surface.write_to_png (f"{args.fasta.split(".")[0]}.png")
-
-# NOTES FOR ME:
-# make a hard-coded tuple of 5 colors because you won't ever have more than 5 motifs.
-# For however many motifs you have, get the first that many colors.
+# Write image
+surface.write_to_png(f"{args.fasta.split(".")[0]}.png")
