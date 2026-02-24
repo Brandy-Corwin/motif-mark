@@ -54,9 +54,10 @@ bases = {'A': 'A', 'C': 'C', 'G': 'G', 'T': 'T', 'U': 'T',
 
 # Initialize image
 width, height = 1100, 1300
-
 surface = cairo.SVGSurface(f"{args.fasta.split(".")[0]}.svg", width, height)
 context = cairo.Context(surface)
+context.set_source_rgb(1,1,1)
+context.paint()
 
 # Hardcode colors for max of 5 motifs
 colors = ((242/255.0, 37/255.0, 37/255.0), (240/255.0, 207/255.0, 26/255.0), (79/255.0, 212/255.0, 56/255.0), (34/255.0, 79/255.0, 235/255.0), (172/255.0, 56/255.0, 245/255.0))
